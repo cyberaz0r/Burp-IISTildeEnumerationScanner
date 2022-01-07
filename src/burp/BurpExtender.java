@@ -5,12 +5,17 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.io.FileOutputStream;
 import java.io.File;
+import java.io.FileReader;
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
 import java.util.List;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.LinkedHashSet;
+import java.util.Collections;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.awt.Font;
@@ -39,13 +44,13 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.border.CompoundBorder;
 import javax.swing.JFileChooser;
 
-public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
+public class BurpExtender implements IBurpExtender, ITab, IScannerCheck, IIntruderPayloadGeneratorFactory
 {
     private IBurpExtenderCallbacks callbacks;
     private IExtensionHelpers helpers;
 
     private final String NAME = "IIS Tilde Enumeration Scanner";
-    private final String VERSION = "1.0";
+    private final String VERSION = "1.1";
     private final String AUTHOR = "Michele 'cyberaz0r' Di Bonaventura";
 
     private JTabbedPane mainUI;
@@ -53,6 +58,7 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
 
     private KillableThread tildeEnumScanner = new KillableThread();
 
+    private List<String> intruderPayloads = new ArrayList<String>();
 
     // extension tab name
     @Override
@@ -84,6 +90,9 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
 
         // register scanner checks
         callbacks.registerScannerCheck(this);
+
+        // register intruder payload generator (for filename guessing from scan results)
+        callbacks.registerIntruderPayloadGeneratorFactory(this);
         
         SwingUtilities.invokeLater(new Runnable() 
         {
@@ -110,9 +119,12 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
                 t.setRepeats(false);
 
                 // setting up config panel in configuration tab
+                JPanel rightPanel = new JPanel();
+                rightPanel.setLayout(new BoxLayout(rightPanel, BoxLayout.Y_AXIS));
+                JScrollPane rightScrollPanel = new JScrollPane(rightPanel);
+                rightScrollPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
+
                 JPanel confPanel = new JPanel(new GridLayout(27, 1));
-                JScrollPane confScrollPanel = new JScrollPane(confPanel);
-                confScrollPanel.setBorder(new EmptyBorder(20, 20, 20, 20));
 
                 JLabel confTitle = new JLabel("Configuration");
                 confTitle.setForeground(new Color(249, 130, 11));
@@ -135,6 +147,7 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
                 // setting up elements in request panel in configuration tab
                 JTextPane requestEditor = new JTextPane();
                 JScrollPane requestScrollEditor = new JScrollPane(requestEditor);
+                requestEditor.setFont(new Font("Courier", 0, 14));
                 requestEditor.setBorder(BorderFactory.createLineBorder(Color.BLACK));
                 requestEditor.setText
                 (
@@ -201,7 +214,30 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
                 confPanel.add(new JLabel("In-Scope characters:"));
                 confFields.put("inScopeCharacters", new JTextField("ETAONRISHDLFCMUGYPWBVKJXQZ0123456789_-$~()&!#%'@^`{}", 50));
                 confPanel.add(confFields.get("inScopeCharacters"));
+
+                JPanel filenameGuessingPanel = new JPanel(new GridLayout(6, 1));
+
+                JLabel filenameGuessingTitle = new JLabel("Complete filename guessing");
+                filenameGuessingTitle.setForeground(new Color(249, 130, 11));
+                filenameGuessingTitle.setFont(new Font("Nimbus", Font.BOLD, 16));
+                filenameGuessingTitle.setAlignmentX(Component.LEFT_ALIGNMENT);
+                filenameGuessingTitle.setBorder(new CompoundBorder(confTitle.getBorder(), new EmptyBorder(10, 10, 10, 10)));
+                filenameGuessingPanel.add(filenameGuessingTitle);
+
+                JCheckBox completeFileGuessCheckbox = new JCheckBox("Create an Intruder Payload Set with possible filenames (using wordlists)", false);
+                filenameGuessingPanel.add(completeFileGuessCheckbox);
+
+                filenameGuessingPanel.add(new JLabel("Complete file name wordlist:"));
+                confFields.put("fileNameWordlist", new JTextField("", 50));
+                filenameGuessingPanel.add(confFields.get("fileNameWordlist"));
+
+                filenameGuessingPanel.add(new JLabel("Complete file extension wordlist:"));
+                confFields.put("fileExtWordlist", new JTextField("", 50));
+                filenameGuessingPanel.add(confFields.get("fileExtWordlist"));
                 
+                rightPanel.add(confPanel);
+                rightPanel.add(filenameGuessingPanel);
+
                 // setting up scanner tab
                 JSplitPane scannerTab = new JSplitPane(JSplitPane.VERTICAL_SPLIT);
                 scannerTab.setBorder(new EmptyBorder(20, 20, 20, 20));
@@ -215,6 +251,7 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
                 // setting up elements in scanner tab
                 JTextPane textPane = new JTextPane();
                 JScrollPane textScrollPane = new JScrollPane(textPane);
+                textPane.setFont(new Font("Courier", 0, 12));
                 textPane.setText("IIS Tilde Enumeration Scanner Burp Extension is ready\nThe scan output will be displayed here");
                 textPane.setEditable(false);
 
@@ -256,6 +293,7 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
                         confFields,
                         nThreadsField,
                         exploitModeCheckbox,
+                        completeFileGuessCheckbox,
                         requestEditor,
                         statusLabel
                     )
@@ -282,7 +320,7 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
                 scannerTab.setBottomComponent(scannerBottomPanel);
 
                 configTab.setTopComponent(requestPanel);
-                configTab.setBottomComponent(confScrollPanel);
+                configTab.setBottomComponent(rightScrollPanel);
 
                 t.start(); // triggering listener for splitting config tab 50:50
 
@@ -450,6 +488,18 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
     {
         return null;
     }
+    
+    @Override
+    public String getGeneratorName()
+    {
+        return "Filename guessing from Tilde Enumeration scan results";
+    }
+
+    @Override
+    public IIntruderPayloadGenerator createNewInstance(IIntruderAttack attack)
+    {
+        return new IntruderPayloadGenerator(intruderPayloads);
+    }
 
     // strip response data in order to get more granular results
     public String stripResponse(String response, String basePath, String queryString)
@@ -510,8 +560,11 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
         private int deltaResponseLength;
         private int nThreads;
         private boolean exploitMode;
+        private boolean completeFileGuess;
+        private File fileNameWordlist;
+        private File fileExtWordlist;
 
-        public CustomConfig(HashMap<String, JTextField> confFields, JTextPane requestEditor, JTextField nThreadsField, JCheckBox exploitModeCheckbox)
+        public CustomConfig(HashMap<String, JTextField> confFields, JTextPane requestEditor, JTextField nThreadsField, JCheckBox exploitModeCheckbox, JCheckBox completeFileGuessCheckbox)
         {
             this.magicFinalPartList = Arrays.asList(confFields.get("magicFinalPartList").getText().split(","));
             this.questionMarkSymbol = confFields.get("questionMarkSymbol").getText();
@@ -529,6 +582,9 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
             this.requestString = requestEditor.getText();
             this.nThreads = Integer.parseInt(nThreadsField.getText());
             this.exploitMode = exploitModeCheckbox.isSelected();
+            this.completeFileGuess = completeFileGuessCheckbox.isSelected();
+            this.fileNameWordlist = new File(confFields.get("fileNameWordlist").getText());
+            this.fileExtWordlist = new File(confFields.get("fileExtWordlist").getText());
         }
         
         public List<String> getMagicFinalPartList()
@@ -610,6 +666,21 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
         {
             return this.exploitMode;
         }
+        
+        public boolean getCompleteFileGuess()
+        {
+            return this.completeFileGuess;
+        }
+        
+        public File getFileNameWordlist()
+        {
+            return this.fileNameWordlist;
+        }
+        
+        public File getFileExtWordlist()
+        {
+            return this.fileExtWordlist;
+        }
 
         public void setQuestionMarkSymbol(String questionMarkSymbol)
         {
@@ -671,10 +742,11 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
         private HashMap<String, JTextField> confFields;
         private JTextField nThreadsField;
         private JCheckBox exploitModeCheckbox;
+        private JCheckBox completeFileGuessCheckbox;
         private JTextPane requestEditor;
         private JLabel statusLabel;
 
-        public StartScanButton(JTextField targetUrlField, JTextPane textPane, HashMap<String, JTextField> confFields, JTextField nThreadsField, JCheckBox exploitModeCheckbox, JTextPane requestEditor, JLabel statusLabel)
+        public StartScanButton(JTextField targetUrlField, JTextPane textPane, HashMap<String, JTextField> confFields, JTextField nThreadsField, JCheckBox exploitModeCheckbox, JCheckBox completeFileGuessCheckbox, JTextPane requestEditor, JLabel statusLabel)
         {
             super();
             this.targetUrlField = targetUrlField;
@@ -682,6 +754,7 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
             this.confFields = confFields;
             this.nThreadsField = nThreadsField;
             this.exploitModeCheckbox = exploitModeCheckbox;
+            this.completeFileGuessCheckbox = completeFileGuessCheckbox;
             this.requestEditor = requestEditor;
             this.statusLabel = statusLabel;
         }
@@ -754,7 +827,7 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
                 tildeEnumScanner = new TildeEnumScanner
                 (
                     targetUrlField.getText(),
-                    new CustomConfig(confFields, requestEditor, nThreadsField, exploitModeCheckbox),
+                    new CustomConfig(confFields, requestEditor, nThreadsField, exploitModeCheckbox, completeFileGuessCheckbox),
                     new CustomOutput(textPane, statusLabel)
                 );
                 tildeEnumScanner.start();
@@ -972,7 +1045,18 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
                     return;
                 }
                 
-                
+                // checking for complete guessing wordlist files existence (if complete filename guessing is enabled)
+                if (config.getCompleteFileGuess())
+                {
+                    if(!(config.getFileNameWordlist().exists()) || !(config.getFileExtWordlist().exists()))
+                    {
+                        output.print("[X] Error: Complete filename guessing requires a wordlist of file names and a wordlist for file extensions, the provided wordlist files do not exist");
+                        output.status("Ready to scan");
+                        toggleScanButton(false);
+                        return;
+                    }
+                }
+
                 output.print("[+] Started scan for URL \"" + targetUrl + "\"\n");
 
                 // initialize requester object
@@ -1034,7 +1118,6 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
                 bruteforcer.waitTilFinished();
 
                 output.print("\n[+] Bruteforce completed\n");
-                output.status("Scan completed");
                 
                 output.print("[+] Requests sent: " + requester.getReqCounter());
 
@@ -1101,8 +1184,48 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
                         output.print(Utils.tree("Actual extension = " + currentExt, 2));
                     }
                 }
+
+                // complete filename guess
+                if (config.getCompleteFileGuess())
+                {
+                    output.status("Generating complete filename list");
+                    output.print("\n[*] Generating Intruder payload list for complete filename guessing");
+
+                    // generate match list
+                    MatchList possibleNames = new MatchList
+                    (
+                        bruteforcer.getDirsFound(),
+                        bruteforcer.getFilesFound(),
+                        config.getFileNameWordlist(),
+                        config.getFileExtWordlist()
+                    );
+
+                    // fill intruder payloads list with all possible filename matches
+                    intruderPayloads = possibleNames.getMatches();
+
+                    // get offsets for insertion point
+                    int offset = new String("GET " + requester.getBasePath() + "/").length();
+                    List<int[]> insertionPoints = new ArrayList<int[]>() {{ add(new int[] {offset, offset}); }};
+
+                    // send base request to intruder
+                    callbacks.sendToIntruder
+                    (
+                        requester.getHttpService().getHost(),
+                        requester.getHttpService().getPort(),
+                        requester.getHttpService().getProtocol().equals("https"),
+                        config.getRequestString()
+                            .replace("§METHOD§", "GET")
+                            .replace("§HOST§",  requester.getHttpService().getHost())
+                            .replace("§PATH§", requester.getBasePath() + "/")
+                            .replace("\n", "\r\n")
+                            .getBytes(),
+                        insertionPoints
+                    );
+                    
+                    output.print("[+] Generated " + intruderPayloads.size() + " possible complete filenames, switch to Intruder to launch a guessing attack using the generated filenames");
+                }
                 
-                
+                output.status("Scan completed");
                 toggleScanButton(false);
             }
             catch (RuntimeException e)
@@ -2044,6 +2167,116 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
                 return false;
             }
         }
+
+        class MatchList
+        {
+            private List<String> matches;
+            private List<String> elementsFound;
+            private List<String> possibleFileNames;
+            private List<String> possibleFileExts;
+            
+            public MatchList(List<String> dirsFound, List<String> filesFound, File fileNameWordlist, File fileExtWordlist)
+            {
+                this.elementsFound = buildElementList(dirsFound, filesFound);
+                this.possibleFileNames = Utils.readFile(fileNameWordlist); 
+                this.possibleFileExts = Utils.readFile(fileExtWordlist);
+                this.matches = buildMatchList();
+            }
+            
+            private List<String> buildElementList(List<String> dirsFound, List<String> filesFound)
+            {
+                List<String> elements = new ArrayList<String>();
+                List<String> parsedElements = new ArrayList<String>();
+                
+                elements.addAll(dirsFound);
+                elements.addAll(filesFound);
+                Collections.sort(elements);
+                
+                for (int i = 0; i < elements.size(); i++)
+                {
+                    if (i < elements.size() - 1)
+                    {
+                        if (elements.get(i+1).startsWith(elements.get(i)))
+                        {
+                            continue;
+                        }
+                    }
+                    
+                    parsedElements.add(elements.get(i).replace("\\?", ""));
+                }
+                
+                return parsedElements;
+            }
+            
+            private List<String> buildMatchList()
+            {
+                List<String> matchesFound = new ArrayList<String>();
+                
+                for (String name : possibleFileNames)
+                {
+                    for (String elem : elementsFound)
+                    {
+                        String elemName = elem.split("~")[0];
+                        
+                        if (elemName.length() < 6)
+                        {
+                            continue;
+                        }
+                        
+                        if (name.toUpperCase().startsWith(elemName))
+                        {
+                            if (elem.indexOf(".") > 0)
+                            {
+                                List<String> elemExts = buildExtensionList(elem.substring(elem.lastIndexOf('.') + 1));
+                                for (String ext : elemExts)
+                                {
+                                    matchesFound.add(name.toUpperCase() + "." + ext);
+                                }
+                            }
+                            else
+                            {
+                                matchesFound.add(name.toUpperCase());
+                            }
+                        }
+                        
+                    }
+                }
+                
+                Collections.sort(matchesFound);
+                return matchesFound;
+            }
+            
+            private List<String> buildExtensionList(String elemExt)
+            {
+                List<String> fileExts = new ArrayList<String>();
+                
+                for (String ext : possibleFileExts)
+                {
+                    if (ext.startsWith("."))
+                    {
+                        ext = ext.substring(1, ext.length());
+                    }
+                    
+                    if (ext.toUpperCase().startsWith(elemExt))
+                    {
+                        fileExts.add(ext.toUpperCase());
+                    }
+                }
+                
+                if (fileExts.isEmpty())
+                {
+                    fileExts.add(elemExt);
+                }
+
+                // remove duplicates before return
+                return new ArrayList<String>(new LinkedHashSet<>(fileExts));
+            }
+            
+            public List<String> getMatches()
+            {
+                return this.matches;
+            }
+        }
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2211,6 +2444,38 @@ public class BurpExtender implements IBurpExtender, ITab, IScannerCheck
     }
 }
 
+// class to handle Intruder payload generator for filename guessing from scan results
+class IntruderPayloadGenerator implements IIntruderPayloadGenerator
+{
+    private List<String> payloads;
+    int payloadIndex;
+
+    public IntruderPayloadGenerator(List<String> payloads)
+    {
+        this.payloads = payloads;
+    }
+
+    @Override
+    public boolean hasMorePayloads()
+    {
+        return payloadIndex < payloads.size();
+    }
+
+    @Override
+    public byte[] getNextPayload(byte[] baseValue)
+    {
+        byte[] payload = payloads.get(payloadIndex).getBytes();
+        payloadIndex++;
+        return payload;
+    }
+
+    @Override
+    public void reset()
+    {
+        payloadIndex = 0;
+    }
+}
+
 // custom issue class
 class CustomScanIssue implements IScanIssue
 {
@@ -2348,5 +2613,31 @@ class Utils{
     {
         String dentSpace = new String(new char[level]).replace("\0", "  ");
         return dentSpace + "|_ " + str;
+    }
+
+    public static List<String> readFile(File file)
+    {
+        List<String> fileContent = new ArrayList<String>();
+        
+        try (BufferedReader br = new BufferedReader(new FileReader(file)))
+        {
+            String line;
+            while ((line = br.readLine()) != null)
+            {
+                fileContent.add(line);
+            }
+        }
+        
+        catch (FileNotFoundException e)
+        {
+            return null;
+        }
+        
+        catch (IOException e)
+        {
+            return null;
+        }
+        
+        return fileContent;
     }
 }
