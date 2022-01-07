@@ -17,11 +17,11 @@ In the Burp UI tab you can:
 ## Screenshots
 
 ### Scanner tab (1366x768)
-![scanner_tab](https://user-images.githubusercontent.com/35109470/146651512-3a18c9ac-6725-46fa-9c48-a869d4d3f150.png)
+![1](https://user-images.githubusercontent.com/35109470/148612099-280700ba-db64-4f2e-bcfa-3df83c393bb2.png)
 
 
 ### Configuration tab (1366x768)
-![config_tab](https://user-images.githubusercontent.com/35109470/146651516-fa33595c-0904-497b-9e28-7591428d5449.png)
+![2](https://user-images.githubusercontent.com/35109470/148612152-8dee95ef-418c-4a99-b73f-8f07d5c04b61.png)
 
 ## Changelog
 
