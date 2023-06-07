@@ -1,13 +1,13 @@
-<p>A Burp extension to enumerate all the shortnames in an IIS webserver by exploiting the IIS Tilde Enumeration vulnerability</p>
+<p>A Burp extension to check for the IIS Tilde Enumeration/IIS short name (8.3) disclosure vulnerability and to exploit it by enumerating all the short names in an IIS web server</p>
 <p>Based on <a href="https://github.com/irsdl/IIS-ShortName-Scanner">IIS ShortName Scanner</a></p>
-<p>This extension will add an Active Scanner check for detecting IIS Tilde Enumeration vulnerability and add a new tab in the Burp UI to manually exploit the vulnerability</p>
+<p>This extension will add an Active Scanner check for detecting IIS Tilde Enumeration vulnerability and add a new tab in the Burp UI to manually check and exploit the vulnerability</p>
 <p>In the Burp UI tab you can:</p>
 <ul>
     <li>Check if a host is vulnerable without exploiting the vulnerability</li>
-    <li>Exploit the vulnerability by enumerating every shortname in an IIS webserver directory</li>
+    <li>Exploit the vulnerability by enumerating every 8.3 short name in an IIS webserver directory</li>
     <li>Configure the parameters used for the scan and customize them in any way you want</li>
     <li>Edit the base request performed (you can add headers, cookies, edit the User Agent, etc)</li>
     <li>Save the scan output to a file</li>
-    <li>Create an Intruder Payload Set for guessing complete names from shortnames retrieved from scan results (by using wordlists)</li>
+    <li>Create an Intruder Payload Set for guessing complete names from short names retrieved from scan results by using sitemap URLs or dedicated user-provided wordlists</li>
 </ul>
 <p>The source code is available <a href="https://github.com/cyberaz0r/Burp-IISTildeEnumerationScanner">here</a></p>
