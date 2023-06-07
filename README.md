@@ -17,7 +17,7 @@ In the Burp UI tab you can:
 ## Build
 In order to build the extension Gradle is required. By issuing the following command on the root directory of the project, the extension will be built as a jar file including all dependencies and will be ready to be added to Burp Suite.
 ```bash
-gradle build fatJar
+gradle fatJar
 ```
 The generated jar file will be available on the `./build/libs` subdirectory, with the name `Burp-IISTildeEnumerationScanner-all-<VERSION>.jar`
 
