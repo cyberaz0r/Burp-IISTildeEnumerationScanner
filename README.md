@@ -1,5 +1,5 @@
 # Burp IIS Tilde Enumeration Scanner
-A Burp extension to check for the IIS Tilde Enumeration/IIS short name (8.3) disclosure vulnerability and to exploit it by enumerating all the short names in an IIS web server
+A Burp extension to check for the IIS Tilde Enumeration/IIS 8.3 Short Filename Disclosure vulnerability and to exploit it by enumerating all the short names in an IIS web server
 
 Based on <a href="https://github.com/irsdl/IIS-ShortName-Scanner">IIS ShortName Scanner</a>
 
@@ -14,6 +14,13 @@ In the Burp UI tab you can:
 * Save the scan output to a file
 * Create an Intruder Payload Set for guessing complete names from short names retrieved from scan results by using sitemap URLs or dedicated user-provided wordlists
 
+## Build
+In order to build the extension Gradle is required. By issuing the following command on the root directory of the project, the extension will be built as a jar file including all dependencies and will be ready to be added to Burp Suite.
+```bash
+gradle build fatJar
+```
+The generated jar file will be available on the `./build/libs` subdirectory, with the name `Burp-IISTildeEnumerationScanner-all-<VERSION>.jar`
+
 ## Screenshots
 
 ### Scanner tab (1920x1080)
@@ -23,7 +30,7 @@ In the Burp UI tab you can:
 ![2](https://github.com/cyberaz0r/Burp-IISTildeEnumerationScanner/assets/35109470/a37d7488-d29c-40b6-9e53-b845476c8353)
 
 ## Changelog
-* V2.0
+* v2.0
   * Completely refactored code (ate all the spaghetti, now it is fine ;) )
   * Upgraded threading system to a completely new and improved version to address threading-related bugs such as bruteforce running after stopping and issues with the scan/stop button not starting or stopping the scan correctly
   * Adjusted default configuration values and some active scan parameters to improve accuracy of detection
