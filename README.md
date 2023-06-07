@@ -17,11 +17,10 @@ In the Burp UI tab you can:
 ## Screenshots
 
 ### Scanner tab (1920x1080)
-![1](https://user-images.githubusercontent.com/35109470/148612099-280700ba-db64-4f2e-bcfa-3df83c393bb2.png)
-
+![1](https://github.com/cyberaz0r/Burp-IISTildeEnumerationScanner/assets/35109470/288d26b6-32f1-4ceb-9a84-99212a633277)
 
 ### Configuration tab (1920x1080)
-![2](https://user-images.githubusercontent.com/35109470/148612152-8dee95ef-418c-4a99-b73f-8f07d5c04b61.png)
+![2](https://github.com/cyberaz0r/Burp-IISTildeEnumerationScanner/assets/35109470/a37d7488-d29c-40b6-9e53-b845476c8353)
 
 ## Changelog
 * V2.0
