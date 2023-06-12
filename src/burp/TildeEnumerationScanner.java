@@ -450,7 +450,7 @@ class TildeEnumerationScanner extends Thread {
 			public void run() {
 				for (String finalPart : config.getMagicFinalPartList()) {
 					for (String method : config.getRequestMethods()) {
-						if (isInterrupted())
+						if (Thread.currentThread().isInterrupted())
 							return;
 
 						output.print("[*] Trying method \"" + method + "\" with magic final part \"" + finalPart + "\"");
